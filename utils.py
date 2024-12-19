@@ -1,9 +1,12 @@
+from csv import DictReader
+from io import StringIO
 import os, sys
 import json
 import subprocess
 import signal
 import shlex
 import time
+import torch
 from dataclasses import dataclass
 from transformers import AutoTokenizer
 
@@ -100,6 +103,12 @@ def read_gpu_memory():
     """
     Read the GPU memory usage by using nvidia-smi command
     """
+    if torch.version.hip:
+        command = "rocm-smi --showmeminfo vram --csv"
+        result = subprocess.run(command, shell=True, stdout=subprocess.PIPE)
+        csv_reader = DictReader(StringIO(result.stdout.decode()))
+        return json.dumps({f"gpu-{row['device'][-1]}": int(row['VRAM Total Used Memory (B)'])/(1024**3) for row in csv_reader})
+
     command = "nvidia-smi --query-gpu=memory.used --format=csv,nounits,noheader"
     result = subprocess.run(command, shell=True, stdout=subprocess.PIPE)
     return json.dumps(
@@ -114,4 +123,4 @@ def get_max_context_length(model: str) -> int:
         case "meta-llama/Llama-3.1-8B-Instruct":
             return 32768
         case _:
-            return 32768
+            return 18400
